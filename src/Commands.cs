@@ -242,3 +242,4 @@ namespace K4ryuuSimpleRanks
 		}
 	}
 }
+
