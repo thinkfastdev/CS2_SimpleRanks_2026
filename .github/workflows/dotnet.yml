@@ -3,8 +3,6 @@ name: .NET Build for Dev
 on:
   push:
     branches: [ "dev" ]
-  pull_request:
-    branches: [ "dev" ]
   workflow_dispatch:
 
 jobs:
@@ -25,9 +23,9 @@ jobs:
     - name: Build
       run: dotnet build src/K4ryuuSimpleRanks.csproj -c Release
       
+    # ASIL FIX BURASI: Tüm bin klasörünü tarayıp .dll olan her şeyi getirir
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: SimpleRanks-Fixed-Package
-        # src içindeki bin klasörüne bakıyoruz:
-        path: src/bin/Release/net8.0/*.dll
+        name: SimpleRanks-Final-DLL
+        path: "**/bin/Release/**/*.dll"
