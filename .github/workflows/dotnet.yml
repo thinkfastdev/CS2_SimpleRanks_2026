@@ -5,7 +5,7 @@ on:
     branches: [ "dev" ]
   pull_request:
     branches: [ "dev" ]
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,13 +20,14 @@ jobs:
         dotnet-version: 8.0.x
         
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore src/K4ryuuSimpleRanks.csproj
       
     - name: Build
-      run: dotnet build -c Release
+      run: dotnet build src/K4ryuuSimpleRanks.csproj -c Release
       
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: SimpleRanks-Fixed-Package
-        path: bin/Release/net8.0/*.dll
+        # src içindeki bin klasörüne bakıyoruz:
+        path: src/bin/Release/net8.0/*.dll
