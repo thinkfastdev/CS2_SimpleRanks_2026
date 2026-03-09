@@ -34,7 +34,10 @@ namespace K4ryuuSimpleRanks
 
 			MySql!.ExecuteNonQueryAsync($"UPDATE `k4ranks` SET `points` = 0 WHERE `steam_id` = {player!.SteamID};");
 
-			Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{player.PlayerName} has reset their rank and points.");
+			// Ana thread'e dönerek global chat mesajı gönderiyoruz
+			Server.NextFrame(() => {
+				Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{player.PlayerName} has reset their rank and points.");
+			});
 		}
 
 		[ConsoleCommand("ranktop", "Check the top 5 players by points")]
@@ -46,34 +49,39 @@ namespace K4ryuuSimpleRanks
 
 			MySqlQueryResult result = await MySql!.Table("k4ranks").ExecuteQueryAsync("SELECT `points`, `name` FROM `k4ranks` ORDER BY `points` DESC LIMIT 5;");
 
-			if (result.Count > 0)
-			{
-				player!.PrintToChat($" {CFG.config.ChatPrefix} Top 5 Players:");
+			// SQL cevabı geldi, şimdi ana thread'e geçip ekrana yazdırıyoruz
+			Server.NextFrame(() => {
+				if (player == null || !player.IsValid) return;
 
-				for (int i = 0; i < result.Count; i++)
+				if (result.Count > 0)
 				{
-					int pointChcek = result.Get<int>(i, "points");
-					string playerRank = "None";
+					player.PrintToChat($" {CFG.config.ChatPrefix} Top 5 Players:");
 
-					foreach (var kvp in ranks)
+					for (int i = 0; i < result.Count; i++)
 					{
-						string level = kvp.Key;
-						Rank rank = kvp.Value;
+						int pointChcek = result.Get<int>(i, "points");
+						string playerRank = "None";
 
-						if (pointChcek >= rank.Exp)
+						foreach (var kvp in ranks)
 						{
-							playerRank = level;
+							string level = kvp.Key;
+							Rank rank = kvp.Value;
+
+							if (pointChcek >= rank.Exp)
+							{
+								playerRank = level;
+							}
+							else
+								break;
 						}
-						else
-							break;
+						player.PrintToChat($" {ChatColors.Gold}{i + 1}. {ChatColors.Blue}[{playerRank}] {ChatColors.Gold}{result.Get<string>(i, "name")} - {ChatColors.Blue}{result.Get<int>(i, "points")} points");
 					}
-					player.PrintToChat($" {ChatColors.Gold}{i + 1}. {ChatColors.Blue}[{playerRank}] {ChatColors.Gold}{result.Get<string>(i, "name")} - {ChatColors.Blue}{result.Get<int>(i, "points")} points");
 				}
-			}
-			else
-			{
-				player!.PrintToChat($" {CFG.config.ChatPrefix} No players found in the top 5.");
-			}
+				else
+				{
+					player.PrintToChat($" {CFG.config.ChatPrefix} No players found in the top 5.");
+				}
+			});
 		}
 
 		[ConsoleCommand("resetrank", "Resets the targeted player's points to zero")]
@@ -81,7 +89,7 @@ namespace K4ryuuSimpleRanks
 		[RequiresPermissions("@k4ranks/admin")]
 		public void OnCommandResetOtherRank(CCSPlayerController? player, CommandInfo command)
 		{
-			if (!player.IsValidPlayer())
+			if (player != null && !player.IsValidPlayer())
 				return;
 
 			List<CCSPlayerController> players = Utilities.GetPlayers();
@@ -94,11 +102,15 @@ namespace K4ryuuSimpleRanks
 
 					MySql!.ExecuteNonQueryAsync($"UPDATE `k4ranks` SET `points` = 0 WHERE `steam_id` = {target.SteamID};");
 
-					Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{target.PlayerName}'s rank and points has been reset by {player!.PlayerName}.");
-					Log($"{player.PlayerName} has reset {target.PlayerName}'s points.");
+					Server.NextFrame(() => {
+						Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{target.PlayerName}'s rank and points has been reset by {(player != null ? player.PlayerName : "Console")}.");
+						Log($"{(player != null ? player.PlayerName : "Console")} has reset {target.PlayerName}'s points.");
 
-					PlayerSummaries[player].Points = 0;
-					CheckNewRank(player);
+						if (target != null && target.IsValid) {
+							PlayerSummaries[target].Points = 0;
+							CheckNewRank(target);
+						}
+					});
 
 					return;
 				}
@@ -110,7 +122,7 @@ namespace K4ryuuSimpleRanks
 		[RequiresPermissions("@k4ranks/admin")]
 		public void OnCommandSetPoints(CCSPlayerController? player, CommandInfo command)
 		{
-			if (!player.IsValidPlayer())
+			if (player != null && !player.IsValidPlayer())
 				return;
 
 			if (int.TryParse(command.ArgByIndex(2), out int parsedInt))
@@ -125,11 +137,15 @@ namespace K4ryuuSimpleRanks
 
 						MySql!.ExecuteNonQueryAsync($"UPDATE `k4ranks` SET `points` = {parsedInt} WHERE `steam_id` = {target.SteamID};");
 
-						Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{target.PlayerName}'s points has been set to {parsedInt} by {player!.PlayerName}.");
-						Log($"{player.PlayerName} has set {target.PlayerName}'s points to {parsedInt}.");
+						Server.NextFrame(() => {
+							Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{target.PlayerName}'s points has been set to {parsedInt} by {(player != null ? player.PlayerName : "Console")}.");
+							Log($"{(player != null ? player.PlayerName : "Console")} has set {target.PlayerName}'s points to {parsedInt}.");
 
-						PlayerSummaries[player].Points = parsedInt;
-						CheckNewRank(player);
+							if (target != null && target.IsValid) {
+								PlayerSummaries[target].Points = parsedInt;
+								CheckNewRank(target);
+							}
+						});
 
 						return;
 					}
@@ -137,7 +153,7 @@ namespace K4ryuuSimpleRanks
 			}
 			else
 			{
-				player!.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
+				player?.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
 				return;
 			}
 		}
@@ -147,7 +163,7 @@ namespace K4ryuuSimpleRanks
 		[RequiresPermissions("@k4ranks/admin")]
 		public void OnCommandGivePoints(CCSPlayerController? player, CommandInfo command)
 		{
-			if (!player.IsValidPlayer())
+			if (player != null && !player.IsValidPlayer())
 				return;
 
 			if (int.TryParse(command.ArgByIndex(2), out int parsedInt))
@@ -162,11 +178,15 @@ namespace K4ryuuSimpleRanks
 
 						MySql!.ExecuteNonQueryAsync($"UPDATE `k4ranks` SET `points` = (`points` + {parsedInt}) WHERE `steam_id` = {target.SteamID};");
 
-						Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{player!.PlayerName} has given {parsedInt} points to {target.PlayerName}.");
-						Log($"{player.PlayerName} has given {parsedInt} points to {target.PlayerName}.");
+						Server.NextFrame(() => {
+							Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{(player != null ? player.PlayerName : "Console")} has given {parsedInt} points to {target.PlayerName}.");
+							Log($"{(player != null ? player.PlayerName : "Console")} has given {parsedInt} points to {target.PlayerName}.");
 
-						PlayerSummaries[player].Points += parsedInt;
-						CheckNewRank(player);
+							if (target != null && target.IsValid) {
+								PlayerSummaries[target].Points += parsedInt;
+								CheckNewRank(target);
+							}
+						});
 
 						return;
 					}
@@ -174,7 +194,7 @@ namespace K4ryuuSimpleRanks
 			}
 			else
 			{
-				player!.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
+				player?.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
 				return;
 			}
 		}
@@ -184,7 +204,7 @@ namespace K4ryuuSimpleRanks
 		[RequiresPermissions("@k4ranks/admin")]
 		public void OnCommandRemovePoints(CCSPlayerController? player, CommandInfo command)
 		{
-			if (!player.IsValidPlayer())
+			if (player != null && !player.IsValidPlayer())
 				return;
 
 			if (int.TryParse(command.ArgByIndex(2), out int parsedInt))
@@ -199,15 +219,16 @@ namespace K4ryuuSimpleRanks
 
 						MySql!.ExecuteNonQueryAsync($"UPDATE `k4ranks` SET `points` = (`points` - {parsedInt}) WHERE `steam_id` = {target.SteamID};");
 
-						Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{player!.PlayerName} has removed {parsedInt} points from {target.PlayerName}.");
-						Log($"{player.PlayerName} has removed {parsedInt} points from {target.PlayerName}.");
+						Server.NextFrame(() => {
+							Server.PrintToChatAll($" {CFG.config.ChatPrefix} {ChatColors.Red}{(player != null ? player.PlayerName : "Console")} has removed {parsedInt} points from {target.PlayerName}.");
+							Log($"{(player != null ? player.PlayerName : "Console")} has removed {parsedInt} points from {target.PlayerName}.");
 
-						PlayerSummaries[player].Points -= parsedInt;
-
-						if (PlayerSummaries[player].Points < 0)
-							PlayerSummaries[player].Points = 0;
-
-						CheckNewRank(player);
+							if (target != null && target.IsValid) {
+								PlayerSummaries[target].Points -= parsedInt;
+								if (PlayerSummaries[target].Points < 0) PlayerSummaries[target].Points = 0;
+								CheckNewRank(target);
+							}
+						});
 
 						return;
 					}
@@ -215,7 +236,7 @@ namespace K4ryuuSimpleRanks
 			}
 			else
 			{
-				player!.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
+				player?.PrintToChat($" {CFG.config.ChatPrefix} {ChatColors.Red}The given amount is invalid.");
 				return;
 			}
 		}
